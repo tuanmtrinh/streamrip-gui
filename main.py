@@ -5,9 +5,6 @@ import sys
 import asyncio
 from pathlib import Path
 
-# Force X11 (xcb) so Qt doesn't try Wayland and spam warnings
-os.environ.setdefault("QT_QPA_PLATFORM", "xcb")
-
 from PySide6 import QtWidgets
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QIcon, QGuiApplication
