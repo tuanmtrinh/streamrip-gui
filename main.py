@@ -23,7 +23,7 @@ from download_panel import DownloadPanel
 from config_panel import ConfigPanel
 
 APP_TITLE   = "StreamRIP-GUI"
-GUI_VERSION = "streamrip-gui v1-beta"
+GUI_VERSION = "streamrip-gui v0.1.0"
 BASE_DIR    = Path(__file__).resolve().parent
 
 def main():

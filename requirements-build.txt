@@ -1,0 +1,4 @@
+pyinstaller>=6
+requests
+mutagen
+PySide6
