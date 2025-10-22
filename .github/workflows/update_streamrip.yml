@@ -1,0 +1,89 @@
+name: Update vendored streamrip
+
+on:
+  schedule:
+    - cron: "12 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  bump:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Add upstream remote
+        run: |
+          git remote add streamrip-upstream https://github.com/nathom/streamrip.git || true
+          git fetch streamrip-upstream --tags
+
+      - name: Determine latest tag
+        id: tags
+        run: |
+          LATEST_TAG=$(git ls-remote --tags --sort='v:refname' streamrip-upstream \
+            | awk '{print $2}' | sed 's|refs/tags/||' | sed 's|\^{}||' \
+            | grep -E '^v?[0-9]+\.[0-9]+\.[0-9]+$' | tail -n1)
+          echo "latest=${LATEST_TAG}" >> $GITHUB_OUTPUT
+
+      - name: Current vendored version
+        id: cur
+        run: |
+          if [ -f streamrip/streamrip/__init__.py ]; then
+            CUR=$(python - <<'PY'
+from pathlib import Path
+import re
+text = Path("streamrip/streamrip/__init__.py").read_text()
+m = re.search(r"__version__\s*=\s*['\"]([^'\"]+)['\"]", text)
+print(m.group(1) if m else "")
+PY
+)
+          else
+            CUR=""
+          fi
+          echo "cur=${CUR}" >> $GITHUB_OUTPUT
+
+      - name: Skip if already up-to-date
+        if: steps.tags.outputs.latest == steps.cur.outputs.cur
+        run: echo "Already at ${{
+          steps.cur.outputs.cur
+        }}; nothing to do." && exit 0
+
+      - name: Create update branch
+        run: |
+          BR="chore/update-streamrip-${{ steps.tags.outputs.latest }}"
+          git checkout -b "$BR"
+
+      - name: Pull subtree to latest tag
+        run: |
+          git subtree pull --prefix=streamrip streamrip-upstream "${{ steps.tags.outputs.latest }}" --squash || true
+
+      - name: Commit (if changed)
+        run: |
+          if ! git diff --quiet; then
+            git add -A
+            git commit -m "chore: bump vendored streamrip to ${{ steps.tags.outputs.latest }}"
+          else
+            echo "No changes after subtree pull."
+          fi
+
+      - name: Create PR
+        uses: peter-evans/create-pull-request@v6
+        with:
+          branch: "chore/update-streamrip-${{ steps.tags.outputs.latest }}"
+          title: "chore: bump vendored streamrip to ${{ steps.tags.outputs.latest }}"
+          body: "Automated update to the latest upstream release."
+          commit-message: "chore: bump vendored streamrip to ${{ steps.tags.outputs.latest }}"
+          labels: "automation, dependencies"
+          signoff: false
+          delete-branch: true
