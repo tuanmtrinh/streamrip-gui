@@ -2,7 +2,7 @@ name: Update vendored streamrip
 
 on:
   schedule:
-    - cron: "12 3 * * *"
+    - cron: "23 3 * * *"   # daily at 03:23 UTC
   workflow_dispatch:
 
 permissions:
