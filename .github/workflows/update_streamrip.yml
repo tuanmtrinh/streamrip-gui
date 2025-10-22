@@ -23,7 +23,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-      - name: Ensure Python is available
+      - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.x"
@@ -35,57 +35,59 @@ jobs:
 
       - name: Determine latest tag
         id: tags
-        shell: bash
         run: |
-          LATEST_TAG=$(git ls-remote --tags --sort='v:refname' streamrip-upstream \
-            | awk '{print $2}' | sed 's|refs/tags/||' | sed 's|\^{}||' \
-            | grep -E '^v?[0-9]+\.[0-9]+\.[0-9]+$' | tail -n1)
-          echo "latest=${LATEST_TAG}" >> "$GITHUB_OUTPUT"
+          LATEST_TAG=$(git ls-remote --tags --sort='v:refname' streamrip-upstream | awk '{print $2}' | sed 's|refs/tags/||;s|\^{}||' | grep -E '^v?[0-9]+\.[0-9]+\.[0-9]+$' | tail -n1)
+          echo "latest=$LATEST_TAG" >> "$GITHUB_OUTPUT"
 
       - name: Current vendored version
         id: cur
-        shell: bash
         run: |
           if [ -f streamrip/streamrip/__init__.py ]; then
-            CUR=$(python - <<'PY'
-from pathlib import Path
-import re
-p = Path("streamrip/streamrip/__init__.py")
-m = re.search(r"__version__\s*=\s*['\"]([^'\"]+)['\"]", p.read_text())
-print(m.group(1) if m else "")
-PY
-)
+            CUR=$(grep -Po "__version__\s*=\s*['\"]\K[^'\"]+" streamrip/streamrip/__init__.py || true)
           else
             CUR=""
           fi
-          echo "cur=${CUR}" >> "$GITHUB_OUTPUT"
+          echo "cur=$CUR" >> "$GITHUB_OUTPUT"
 
-      # From here on, only run if we're NOT up to date
+      - name: Check up-to-date
+        id: check
+        env:
+          LATEST: ${{ steps.tags.outputs.latest }}
+          CUR: ${{ steps.cur.outputs.cur }}
+        run: |
+          echo "Latest tag: $LATEST"
+          echo "Current:    $CUR"
+          if [ -n "$LATEST" ] && [ "$LATEST" = "$CUR" ]; then
+            echo "uptodate=true"  >> "$GITHUB_OUTPUT"
+          else
+            echo "uptodate=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Create update branch
-        if: ${{ steps.tags.outputs.latest != steps.cur.outputs.cur }}
+        if: ${{ steps.check.outputs.uptodate == 'false' }}
         run: |
           BR="chore/update-streamrip-${{ steps.tags.outputs.latest }}"
           git checkout -b "$BR"
 
       - name: Pull subtree to latest tag
-        if: ${{ steps.tags.outputs.latest != steps.cur.outputs.cur }}
+        if: ${{ steps.check.outputs.uptodate == 'false' }}
         run: |
           git subtree pull --prefix=streamrip streamrip-upstream "${{ steps.tags.outputs.latest }}" --squash || true
 
       - name: Commit (if changed)
         id: commit
-        if: ${{ steps.tags.outputs.latest != steps.cur.outputs.cur }}
+        if: ${{ steps.check.outputs.uptodate == 'false' }}
         run: |
-          if ! git diff --quiet; then
+          if [ -n "$(git status --porcelain)" ]; then
             git add -A
             git commit -m "chore: bump vendored streamrip to ${{ steps.tags.outputs.latest }}"
             echo "changed=true" >> "$GITHUB_OUTPUT"
           else
-            echo "No changes after subtree pull."
             echo "changed=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Create PR
-        if: ${{ steps.tags.outputs.latest != steps.cur.outputs.cur && steps.commit.outputs.changed == 'true' }}
+        if: ${{ steps.check.outputs.uptodate == 'false' && steps.commit.outputs.changed == 'true' }}
         uses: peter-evans/create-pull-request@v6
         with:
           branch: "chore/update-streamrip-${{ steps.tags.outputs.latest }}"
