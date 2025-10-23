@@ -3,7 +3,7 @@ name: Build & Release
 on:
   push:
     tags:
-      - "gui-v*.*.*"
+      - "gui-v*.*.*"   # only your GUI tags trigger releases (avoids upstream tags)
   workflow_dispatch:
 
 permissions:
@@ -17,7 +17,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 1
-          fetch-tags: false
+          fetch-tags: false   # don't fetch all tags
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -39,9 +39,35 @@ jobs:
           QT_MODULE: PySide6
         run: |
           pyinstaller --clean --noconfirm main.spec
-          if (-not (Test-Path "dist\streamrip-gui\streamrip-gui.exe")) {
-            Write-Error "EXE not found after build."
+          Write-Host "Build output:"
+          Get-ChildItem -Recurse dist
+
+      - name: Rename exe to include version
+        shell: pwsh
+        run: |
+          # Determine tag name -> version token
+          $refName = $env:GITHUB_REF_NAME
+          if (-not $refName) { $refName = Split-Path $env:GITHUB_REF -Leaf }  # fallback
+          $ver = $refName
+          if ($ver -like "gui-*") { $ver = $ver.Substring(4) }                # drop "gui-"
+          if (-not ($ver -match '^v[0-9]+\.[0-9]+\.[0-9]+$')) {
+            Write-Host "Tag '$refName' doesn't look like vX.Y.Z; using it as-is."
           }
+
+          # Find built exe (onefile default = dist\streamrip-gui.exe)
+          $p1 = "dist\streamrip-gui.exe"
+          $p2 = "dist\streamrip-gui\streamrip-gui.exe"
+          if (Test-Path $p1) { $src = $p1 }
+          elseif (Test-Path $p2) { $src = $p2 }
+          else {
+            Get-ChildItem -Recurse dist
+            Write-Error "EXE not found after build."
+            exit 1
+          }
+
+          $dst = "dist\streamrip-gui-$ver.exe"
+          Move-Item -Force $src $dst
+          Write-Host "Renamed to $dst"
 
       - name: Publish GitHub Release (attach .exe)
         uses: softprops/action-gh-release@v2
@@ -49,4 +75,4 @@ jobs:
           draft: false
           prerelease: false
           files: |
-            dist/streamrip-gui/streamrip-gui.exe
+            dist/*.exe
