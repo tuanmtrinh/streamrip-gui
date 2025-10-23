@@ -1,5 +1,3 @@
-# download_panel.py
-# Streamrip GUI – Download panel (URLs + Queue + internal status bar)
 from __future__ import annotations
 
 import asyncio
@@ -12,15 +10,13 @@ from PySide6 import QtWidgets, QtGui
 from PySide6.QtCore import Qt, Signal, QSize, QTimer, QUrl
 
 try:
-    # optional: qt-material theming (we only use DARK themes; no live palette changes)
+
     from qt_material import apply_stylesheet as _apply_theme
-except Exception:  # pragma: no cover
+except Exception:
     _apply_theme = None
 
 from config_utils import ConfigManager
 
-
-# ------------------------- helpers -------------------------
 
 def infer_platform(url: str) -> str:
     u = url.lower()
@@ -67,12 +63,18 @@ def pretty_label(media) -> str:
     bit_depth = sr = None
 
     if meta is not None:
-        title = getattr(meta, "album", None) or getattr(meta, "title", None) or getattr(meta, "name", None)
+        title = (
+            getattr(meta, "album", None)
+            or getattr(meta, "title", None)
+            or getattr(meta, "name", None)
+        )
         artist = getattr(meta, "albumartist", None) or getattr(meta, "artist", None)
         info = getattr(meta, "info", None)
         if info is not None:
             bit_depth = getattr(info, "bit_depth", None)
-            sr = getattr(info, "sampling_rate", None) or getattr(info, "sample_rate", None)
+            sr = getattr(info, "sampling_rate", None) or getattr(
+                info, "sample_rate", None
+            )
     else:
         title = getattr(media, "title", None) or getattr(media, "name", None)
         artist = getattr(media, "artist", None) or getattr(media, "album_artist", None)
@@ -100,7 +102,6 @@ def pretty_label(media) -> str:
     return core
 
 
-# Dark themes only (human-readable -> xml)
 DARK_THEMES = {
     "Dark Amber": "dark_amber.xml",
     "Dark Blue": "dark_blue.xml",
@@ -113,13 +114,17 @@ DARK_THEMES = {
 }
 
 
-# ------------------------- main panel -------------------------
-
 class DownloadPanel(QtWidgets.QWidget):
     """Left side: Add URLs + Queue + internal status bar (dark themes only)."""
+
     statusChanged = Signal(str)
 
-    def __init__(self, cfg_mgr: ConfigManager, gui_version: str = "streamrip-gui v1 beta", parent=None):
+    def __init__(
+        self,
+        cfg_mgr: ConfigManager,
+        gui_version: str = "streamrip-gui v1 beta",
+        parent=None,
+    ):
         super().__init__(parent)
         self.cfg_mgr = cfg_mgr
         self.gui_version = gui_version
@@ -127,30 +132,27 @@ class DownloadPanel(QtWidgets.QWidget):
         self._task: Optional[asyncio.Task] = None
         self._last_vw: Optional[int] = None
 
-        # Static dark style (no dynamic palette = no lag)
         self._style = """
             QWidget { font-size: 11pt; }
 
             /* Dark titles for sections on the left panel */
-            QGroupBox::title { color: #ffffff; font-weight: 700; }
+            QGroupBox::title { color: 
 
             /* Internal status bar */
-            #downloadStatus {
-                border-top: 1px solid #3c4043;
-                background-color: #26282b;
-                color: #ffffff;
+
+                border-top: 1px solid 
+                background-color: 
+                color: 
             }
-            #downloadStatus QLabel { font-size: 12pt; color: #ffffff; }
 
             /* Inputs: readable text on dark */
             QLabel, QCheckBox, QLineEdit, QComboBox, QSpinBox, QPlainTextEdit, QTableWidget, QHeaderView::section {
-                color: #e6e6e6;
+                color: 
             }
         """
 
         self._build_ui()
 
-    # ---------------- UI ----------------
     def _build_ui(self):
         self.setContentsMargins(6, 6, 6, 6)
         v = QtWidgets.QVBoxLayout(self)
@@ -158,14 +160,14 @@ class DownloadPanel(QtWidgets.QWidget):
         v.setSpacing(8)
         self.setStyleSheet(self._style)
 
-        # Vertical splitter: URLs (top) + Queue (middle)
         self.split = QtWidgets.QSplitter(Qt.Orientation.Vertical)
 
-        # ---- URLs
         gb_urls = QtWidgets.QGroupBox("ADD URLS")
         lv = QtWidgets.QVBoxLayout(gb_urls)
 
-        self.url_edit = QtWidgets.QPlainTextEdit(placeholderText="Paste one URL per line…")
+        self.url_edit = QtWidgets.QPlainTextEdit(
+            placeholderText="Paste one URL per line…"
+        )
         self.url_edit.setMinimumHeight(120)
         lv.addWidget(self.url_edit, 1)
 
@@ -182,74 +184,76 @@ class DownloadPanel(QtWidgets.QWidget):
         btnrow.addWidget(self.btn_stop)
         lv.addLayout(btnrow)
 
-        # ---- Queue
         gb_q = QtWidgets.QGroupBox("QUEUE")
         rv = QtWidgets.QVBoxLayout(gb_q)
         self.table = QtWidgets.QTableWidget(0, 3)
         self.table.setHorizontalHeaderLabels(["ITEM", "PLATFORM", "STATUS"])
         hh = self.table.horizontalHeader()
         hh.setSectionsMovable(True)
-        hh.setSectionResizeMode(QtWidgets.QHeaderView.Interactive)  # user-adjustable
+        hh.setSectionResizeMode(QtWidgets.QHeaderView.Interactive)
         self.table.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
         self.table.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
         self.table.verticalHeader().setVisible(False)
-        self.table.setIconSize(QSize(self.table.fontMetrics().height(), self.table.fontMetrics().height()))
+        self.table.setIconSize(
+            QSize(self.table.fontMetrics().height(), self.table.fontMetrics().height())
+        )
         rv.addWidget(self.table, 1)
 
         self.split.addWidget(gb_urls)
         self.split.addWidget(gb_q)
         v.addWidget(self.split, 1)
 
-        # ---- Internal status bar (bottom)
         self.status_frame = QtWidgets.QFrame(objectName="downloadStatus")
         self.status_frame.setMinimumHeight(48)
         sh = QtWidgets.QHBoxLayout(self.status_frame)
         sh.setContentsMargins(12, 6, 12, 6)
         sh.setSpacing(10)
 
-        # left: (blank spacer – dark theme fixed)
         sh.addSpacing(2)
 
-        # center: status
         self.status_center = QtWidgets.QLabel("Idle")
         self.status_center.setAlignment(Qt.AlignCenter)
 
-        # right: version buttons
         right_box = QtWidgets.QWidget()
         right_l = QtWidgets.QHBoxLayout(right_box)
         right_l.setContentsMargins(0, 0, 0, 0)
         right_l.setSpacing(8)
-        self.btn_streamrip = QtWidgets.QPushButton(f"streamrip v{self.cfg_mgr.get_streamrip_version() or 'unknown'}")
+        self.btn_streamrip = QtWidgets.QPushButton(
+            f"streamrip v{self.cfg_mgr.get_streamrip_version() or 'unknown'}"
+        )
         self.btn_gui = QtWidgets.QPushButton(self.gui_version)
         for b in (self.btn_streamrip, self.btn_gui):
             b.setCursor(QtGui.QCursor(Qt.PointingHandCursor))
-        self.btn_streamrip.clicked.connect(lambda: QtGui.QDesktopServices.openUrl(QUrl("https://github.com/nathom/streamrip")))
-        self.btn_gui.clicked.connect(lambda: QtGui.QDesktopServices.openUrl(QUrl("https://github.com")))
+        self.btn_streamrip.clicked.connect(
+            lambda: QtGui.QDesktopServices.openUrl(
+                QUrl("https://github.com/nathom/streamrip")
+            )
+        )
+        self.btn_gui.clicked.connect(
+            lambda: QtGui.QDesktopServices.openUrl(QUrl("https://github.com"))
+        )
         right_l.addWidget(self.btn_streamrip)
         right_l.addWidget(self.btn_gui)
 
-        sh.addWidget(QtWidgets.QWidget(), 0)  # left spacer
-        sh.addWidget(self.status_center, 1)   # center
-        sh.addWidget(right_box, 0)            # right
+        sh.addWidget(QtWidgets.QWidget(), 0)
+        sh.addWidget(self.status_center, 1)
+        sh.addWidget(right_box, 0)
         v.addWidget(self.status_frame, 0)
 
-        # Wiring
         self.btn_add.clicked.connect(self._add_from_textbox)
         self.btn_clear.clicked.connect(self.url_edit.clear)
         self.btn_start.clicked.connect(self._start)
         self.btn_stop.clicked.connect(self._stop)
 
-        # Initialize split + columns once
         QTimer.singleShot(0, self._init_splits_and_columns)
 
-    # ---------- layout helpers ----------
     def _init_splits_and_columns(self):
         total = max(1, self.split.height())
-        # 35% (URLs) / 60% (Queue) – status bar fixed height
+
         self.split.setSizes([int(total * 0.35), int(total * 0.60)])
         self._resize_columns(force=True)
 
-    def resizeEvent(self, e):  # type: ignore[override]
+    def resizeEvent(self, e):
         super().resizeEvent(e)
         self._resize_columns()
 
@@ -265,7 +269,6 @@ class DownloadPanel(QtWidgets.QWidget):
         hh.resizeSection(1, int(vw * 0.15))
         hh.resizeSection(2, int(vw * 0.15))
 
-    # ---------- external API ----------
     def add_urls(self, urls: List[str]):
         for u in urls:
             if not u:
@@ -276,15 +279,18 @@ class DownloadPanel(QtWidgets.QWidget):
             self.table.setItem(r, 1, QtWidgets.QTableWidgetItem(infer_platform(u)))
             self.table.setItem(r, 2, QtWidgets.QTableWidgetItem("Pending"))
 
-    # ---------- internals ----------
     def _set_status(self, text: str):
         self.status_center.setText(text)
         self.statusChanged.emit(text)
 
     def _add_from_textbox(self):
-        lines = [l.strip() for l in self.url_edit.toPlainText().splitlines() if l.strip()]
+        lines = [
+            l.strip() for l in self.url_edit.toPlainText().splitlines() if l.strip()
+        ]
         if not lines:
-            QtWidgets.QMessageBox.warning(self, "Streamrip", "Please paste at least one URL.")
+            QtWidgets.QMessageBox.warning(
+                self, "Streamrip", "Please paste at least one URL."
+            )
             return
         self.add_urls(lines)
         self.url_edit.clear()
@@ -304,7 +310,9 @@ class DownloadPanel(QtWidgets.QWidget):
 
     def _start(self):
         if self._task and not self._task.done():
-            QtWidgets.QMessageBox.information(self, "Streamrip", "A job is already running.")
+            QtWidgets.QMessageBox.information(
+                self, "Streamrip", "A job is already running."
+            )
             return
         if self.table.rowCount() == 0:
             QtWidgets.QMessageBox.warning(self, "Streamrip", "Queue is empty.")
@@ -326,12 +334,10 @@ class DownloadPanel(QtWidgets.QWidget):
 
         cfg = self.cfg_mgr.load()
 
-        # ensure output dir
         out = self.cfg_mgr.get_output_folder()
         if out:
             pathlib.Path(out).mkdir(parents=True, exist_ok=True)
 
-        # creds guard
         need_qobuz = any("qobuz.com" in u for u in urls)
         need_deezer = any("deezer." in u for u in urls)
         q = self.cfg_mgr.get_qobuz()
@@ -359,7 +365,9 @@ class DownloadPanel(QtWidgets.QWidget):
                 try:
                     await asyncio.wait_for(main.resolve(), timeout=60)
                 except asyncio.TimeoutError:
-                    logging.getLogger("streamrip").error("Timed out while resolving (check credentials/network).")
+                    logging.getLogger("streamrip").error(
+                        "Timed out while resolving (check credentials/network)."
+                    )
                     self._on_done(False)
                     return
 
@@ -381,13 +389,14 @@ class DownloadPanel(QtWidgets.QWidget):
             logging.getLogger("streamrip").error(f"Error: {e}")
             self._on_done(False)
 
-    # ---------- theming (dark only) ----------
     def _apply_theme(self):
         """Apply selected dark theme via qt-material (if available)."""
         if _apply_theme is None:
-            QtWidgets.QMessageBox.information(self, "Theme", "qt-material is not available in this environment.")
+            QtWidgets.QMessageBox.information(
+                self, "Theme", "qt-material is not available in this environment."
+            )
             return
-        theme_file = list(DARK_THEMES.values())[0]  # fixed default if you wire a picker later
+        theme_file = list(DARK_THEMES.values())[0]
         app = QtWidgets.QApplication.instance()
         try:
             self.setUpdatesEnabled(False)
