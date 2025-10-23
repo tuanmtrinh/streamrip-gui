@@ -1,6 +1,6 @@
-**This repo is created for personal use only. Claims should be directed/forwarded to me at [tuanmtrinh@proton.me](mailto:tuanmtrinh@proton.me).**
+**This is created for personal use only. Claims should be directed/forwarded to me at [tuanmtrinh@proton.me](mailto:tuanmtrinh@proton.me).**
 
-# StreamRIP-GUI - A GUI implementation of [StreamRIP](https://github.com/nathom/streamrip)
+# streamrip-gui - A GUI implementation of [streamrip](https://github.com/nathom/streamrip)
 
 - Cross-platform GUI, with portable Windows executable for download-and-run action!
 - Interactive configuration!
