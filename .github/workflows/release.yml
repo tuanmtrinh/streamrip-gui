@@ -3,7 +3,7 @@ name: Build & Release
 on:
   push:
     tags:
-      - "v*.*.*"
+      - "gui-v*.*.*"
   workflow_dispatch:
 
 permissions:
